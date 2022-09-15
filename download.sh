@@ -10,7 +10,7 @@ set -euo pipefail
 #   * md5sum or md5 (used for Minecraft Forge hash verification)
 
 # You can also run this script as:
-# bash <(curl --tlsv1.2 -sSf https://raw.githubusercontent.com/printfn/mc/main/download.sh) --help
+# bash <(curl --tlsv1.2 -sSf https://printfn.github.io/mc/download.sh) --help
 
 usage="Usage: download.sh [flags] <version>
 
