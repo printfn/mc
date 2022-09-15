@@ -4,10 +4,13 @@ set -euo pipefail
 # Prerequisites:
 #   * curl
 #   * jq
-#   * sha1sum (optional, skips hash verification if not installed)
+#
+# Optional prerequisites:
+#   * sha1sum or shasum (used for Minecraft server.jar hash verification)
+#   * md5sum or md5 (used for Minecraft Forge hash verification)
 
 # You can also run this script as:
-# bash <(curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/printfn/mc/main/download.sh) --help
+# bash <(curl --tlsv1.2 -sSf https://raw.githubusercontent.com/printfn/mc/main/download.sh) --help
 
 usage="Usage: download.sh [flags] <version>
 
@@ -71,31 +74,61 @@ mycurl() {
 
 verify_hash() {
     local filename="$1"
-    local sha1="$2"
+    local hash="$2"
+    local algorithm="$3"
 
-    if command -v sha1sum &>/dev/null; then
-        if sha1sum --check --strict --status <(echo "$sha1 $filename"); then
-            if [[ "$verbose" == true ]]; then
-                echo "Successfully verified checksum with \`sha1sum\`"
+    if [[ "$algorithm" == "sha1" ]]; then
+        if command -v sha1sum &>/dev/null; then
+            if sha1sum --check --strict --status <(echo "$hash $filename"); then
+                if [[ "$verbose" == true ]]; then
+                    echo "Successfully verified checksum with \`sha1sum\`" >&2
+                fi
+            else
+                echo "error: checksum mismatch" >&2
+                exit 1
+            fi
+        elif command -v shasum &>/dev/null; then
+            # two spaces are necessary, otherwise `shasum` returns an error`
+            if shasum --algorithm 1 --check --strict --status <(echo "$hash  $filename"); then
+                if [[ "$verbose" == true ]]; then
+                    echo "Successfully verified checksum with \`shasum\`" >&2
+                fi
+            else
+                echo "error: checksum mismatch" >&2
+                exit 1
             fi
         else
-            echo "error: checksum mismatch" >&2
-            exit 1
+            # skip verification
+            echo "warning: neither \`sha1sum\` nor \`shasum\` is installed: skipping hash verification" >&2
+            exit
         fi
-    elif command -v shasum &>/dev/null; then
-        # two spaces are necessary, otherwise `shasum` returns an error`
-        if shasum --algorithm 1 --check --strict --status <(echo "$sha1  $filename"); then
-            if [[ "$verbose" == true ]]; then
-                echo "Successfully verified checksum with \`shasum\`"
+    elif [[ "$algorithm" == "md5" ]]; then
+        if command -v md5sum &>/dev/null; then
+            if md5sum --check --strict --status <(echo "$hash $filename"); then
+                if [[ "$verbose" == true ]]; then
+                    echo "Successfully verified checksum with \`md5sum\`" >&2
+                fi
+            else
+                echo "error: checksum mismatch" >&2
+                exit 1
+            fi
+        elif command -v md5 &>/dev/null; then
+            if [[ "$(md5 "$filename")" =~ $hash ]]; then
+                if [[ "$verbose" == true ]]; then
+                    echo "Successfully verified checksum with \`md5\`" >&2
+                fi
+            else
+                echo "error: checksum mismatch" >&2
+                exit 1
             fi
         else
-            echo "error: checksum mismatch" >&2
-            exit 1
+            # skip verification
+            echo "warning: neither \`md5sum\` nor \`md5\` is installed: skipping hash verification" >&2
+            exit
         fi
     else
-        # skip verification
-        echo "warning: neither \`sha1sum\` or \`shasum\` is installed: skipping hash verification" >&2
-        exit
+        echo "error: unknown hash algorithm $algorithm" >&2
+        exit 1
     fi
 }
 
@@ -155,7 +188,7 @@ download_mc() {
 
     mycurl $curlsilent -# -o server.jar "$url"
 
-    verify_hash server.jar "$sha1"
+    verify_hash server.jar "$sha1" sha1
 }
 
 download_forge_version() {
@@ -164,12 +197,11 @@ download_forge_version() {
 
     meta=$(mycurl -sS "https://files.minecraftforge.net/net/minecraftforge/forge/$longversion/meta.json")
     installer_md5=$(echo "$meta" | jq -r ".classifiers.installer.jar")
-    if [[ "$verbose" == true ]]; then
-        echo "MD5 checksum is $installer_md5"
-    fi
 
     local filename="forge-$longversion-installer.jar"
     mycurl -#O "https://maven.minecraftforge.net/net/minecraftforge/forge/$longversion/$filename"
+
+    verify_hash "$filename" "$installer_md5" md5
 }
 
 download_forge() {
