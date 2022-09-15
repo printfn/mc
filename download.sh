@@ -116,13 +116,21 @@ fi
 curl $curlsilent $curlflags -# -o server.jar "$url"
 
 if command -v sha1sum &>/dev/null; then
-    if ! sha1sum --check --strict --status <(echo "$sha1 server.jar"); then
+    if sha1sum --check --strict --status <(echo "$sha1 server.jar"); then
+        if [[ "$verbose" == true ]]; then
+            echo "Successfully verified checksum with \`sha1sum\`"
+        fi
+    else
         echo "error: checksum mismatch" >&2
         exit 1
     fi
 elif command -v shasum &>/dev/null; then
     # two spaces are necessary, otherwise `shasum` returns an error`
-    if ! shasum --algorithm 1 --check --strict --status <(echo "$sha1  server.jar"); then
+    if shasum --algorithm 1 --check --strict --status <(echo "$sha1  server.jar"); then
+        if [[ "$verbose" == true ]]; then
+            echo "Successfully verified checksum with \`shasum\`"
+        fi
+    else
         echo "error: checksum mismatch" >&2
         exit 1
     fi
